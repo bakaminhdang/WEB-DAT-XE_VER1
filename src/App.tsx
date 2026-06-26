@@ -14,8 +14,17 @@ import {
 } from "./utils/db";
 
 export default function App() {
-  // Simple state router
-  const [path, setPath] = useState(window.location.pathname);
+  // Simple state router using hash
+  const [path, setPath] = useState(() => {
+    const hash = window.location.hash;
+    if (!hash) {
+      if (window.location.pathname.endsWith("/admin") || window.location.pathname.endsWith("/admin/")) {
+        return "#/admin";
+      }
+      return "#/";
+    }
+    return hash;
+  });
   
   // Authenticated user session
   const [authenticatedUser, setAuthenticatedUser] = useState<IUser | null>(() => {
@@ -32,13 +41,13 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync with browser back/forward buttons
+  // Sync with browser hash changes
   useEffect(() => {
-    const handlePopState = () => {
-      setPath(window.location.pathname);
+    const handleHashChange = () => {
+      setPath(window.location.hash || "#/");
     };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
   // Fetch initial data
@@ -116,13 +125,14 @@ export default function App() {
     localStorage.removeItem("tri_shuttle_user");
   };
 
-  // Helper to handle client-side SPA routing click
+  // Helper to handle client-side SPA routing click using hash
   const navigateTo = (newPath: string) => {
-    window.history.pushState({}, "", newPath);
-    setPath(newPath);
+    const hashPath = newPath.startsWith("/") && !newPath.startsWith("#") ? `#${newPath}` : newPath;
+    window.location.hash = hashPath;
+    setPath(hashPath);
   };
 
-  const isAdminRoute = path.startsWith("/admin");
+  const isAdminRoute = path.startsWith("#/admin") || path.startsWith("/admin");
 
   return (
     <div className="min-h-screen bg-[#F5F5F0] text-[#2D2D2A] font-sans flex flex-col justify-between" id="app-wrapper">
