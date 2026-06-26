@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { KeyRound, Mail, ArrowRight, ShieldAlert, CheckCircle, RefreshCw } from "lucide-react";
 import { IUser } from "../types";
+import { loginUser } from "../utils/db";
 
 interface LoginViewProps {
   onLoginSuccess: (user: IUser) => void;
@@ -23,18 +24,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setError(null);
 
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Incorrect email or password.");
-      }
-
+      const data = await loginUser(email.trim(), password);
       onLoginSuccess(data);
     } catch (err: any) {
       setError(err.message || "Cannot connect to the authentication system.");

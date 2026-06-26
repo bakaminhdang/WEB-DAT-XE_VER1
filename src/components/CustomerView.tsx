@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { IBooking } from "../types";
+import { createBooking } from "../utils/db";
 import { 
   Plane, Phone, User, Briefcase, MapPin, CheckCircle, 
   RefreshCw, AlertCircle, Sparkles, ArrowLeft, ArrowRight, 
@@ -341,29 +342,21 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
       : `Date: ${pickupDate} @ ${timeString}, Pax: ${passengers}, Child Seats: ${childSeatCount}`;
 
     try {
-      const response = await fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          customer_email: customerEmail,
-          flight_number: isAirportPickup && flightNumber.trim() ? flightNumber.toUpperCase() : "N/A",
-          airport_terminal: isAirportPickup ? terminal : "N/A",
-          pickup_pillar: mappedPillar,
-          dropoff_address: `${mappedPickup} -> ${mappedDropoff}`,
-          luggage_count: luggageCount,
-          payment_method: paymentMethod,
-          selected_vehicle: selectedVehicle
-        }),
+      const newBooking = await createBooking({
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        customer_email: customerEmail,
+        flight_number: isAirportPickup && flightNumber.trim() ? flightNumber.toUpperCase() : "N/A",
+        airport_terminal: isAirportPickup ? terminal : "N/A",
+        pickup_pillar: mappedPillar,
+        dropoff_address: `${mappedPickup} -> ${mappedDropoff}`,
+        luggage_count: luggageCount,
+        payment_method: paymentMethod,
+        selected_vehicle: selectedVehicle,
+        status: "Pending",
+        driver_id: null
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Failed to submit booking request");
-      }
-
-      const newBooking = await response.json();
       setSuccessBooking(newBooking);
       onBookingCreated(newBooking);
       setCurrentStep(4);

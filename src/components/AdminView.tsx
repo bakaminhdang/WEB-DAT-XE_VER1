@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { IBooking, IUser } from "../types";
+import { validateFlightAI } from "../utils/db";
 import { 
   Plane, 
   User, 
@@ -107,18 +108,7 @@ export default function AdminView({ bookings, users, onUpdateBooking, onDeleteBo
     setAiCheckingId(booking._id);
     setErrorMessage("");
     try {
-      const response = await fetch("/api/validate-flight", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ flightNumber: booking.flight_number }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Server error checking flight number.");
-      }
-
-      const data = await response.json();
+      const data = await validateFlightAI(booking.flight_number);
       setAiResults((prev) => ({
         ...prev,
         [booking._id]: data,

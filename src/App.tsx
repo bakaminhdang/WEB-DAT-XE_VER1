@@ -5,6 +5,13 @@ import DriverView from "./components/DriverView";
 import LoginView from "./components/LoginView";
 import { IBooking, IUser } from "./types";
 import { Users, Shield, Plane, RefreshCw, LogOut, Lock, Layers } from "lucide-react";
+import { 
+  getBookings, 
+  getUsers, 
+  updateBooking, 
+  deleteBooking, 
+  createUser 
+} from "./utils/db";
 
 export default function App() {
   // Simple state router
@@ -40,23 +47,16 @@ export default function App() {
       setLoading(true);
       setError(null);
 
-      const [bookingsRes, usersRes] = await Promise.all([
-        fetch("/api/bookings"),
-        fetch("/api/users"),
+      const [bookingsData, usersData] = await Promise.all([
+        getBookings(),
+        getUsers(),
       ]);
-
-      if (!bookingsRes.ok || !usersRes.ok) {
-        throw new Error("Error loading data from server.");
-      }
-
-      const bookingsData = await bookingsRes.json();
-      const usersData = await usersRes.json();
 
       setBookings(bookingsData);
       setUsers(usersData);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Cannot connect to the backend server.");
+      setError(err.message || "Cannot load data from local database.");
     } finally {
       setLoading(false);
     }
@@ -71,18 +71,7 @@ export default function App() {
   // Update booking handler
   const handleUpdateBooking = async (id: string, updates: Partial<IBooking>) => {
     try {
-      const res = await fetch(`/api/bookings/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to update booking.");
-      }
-
-      const updatedBooking = await res.json();
+      const updatedBooking = await updateBooking(id, updates);
       setBookings((prev) => prev.map((b) => (b._id === id ? updatedBooking : b)));
     } catch (err: any) {
       console.error(err);
@@ -94,15 +83,7 @@ export default function App() {
   // Delete booking handler
   const handleDeleteBooking = async (id: string) => {
     try {
-      const res = await fetch(`/api/bookings/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to delete booking.");
-      }
-
+      await deleteBooking(id);
       setBookings((prev) => prev.filter((b) => b._id !== id));
     } catch (err: any) {
       console.error(err);
@@ -116,17 +97,13 @@ export default function App() {
   };
 
   const handleCreateUser = async (user: Omit<IUser, "_id">) => {
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(user),
-    });
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || "Failed to create account.");
+    try {
+      const newUser = await createUser(user);
+      setUsers((prev) => [...prev, newUser]);
+    } catch (err: any) {
+      console.error(err);
+      throw err;
     }
-    const newUser = await res.json();
-    setUsers((prev) => [...prev, newUser]);
   };
 
   const handleLoginSuccess = (user: IUser) => {
