@@ -9,7 +9,7 @@ function generateId(): string {
 const defaultUsers: IUser[] = [
   {
     _id: "admin_seed_id",
-    name: "Tri Shuttle Admin",
+    name: "test Admin",
     email: "admin@trishuttle.com",
     phone: "+1 800-555-0100",
     role: "Admin",

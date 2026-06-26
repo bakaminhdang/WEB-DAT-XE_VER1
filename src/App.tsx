@@ -146,7 +146,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-serif text-xl sm:text-2xl tracking-tight text-[#1A1A10] font-bold">
-                Tri Shuttle LAX
+                test LAX
               </h1>
               <p className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#8A8A7A] font-extrabold">
                 {isAdminRoute ? "Operation Management Console" : "LAX Private Luxury Transport"}
@@ -228,7 +228,7 @@ export default function App() {
         {loading && bookings.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
             <RefreshCw className="w-8 h-8 text-[#5A5A40] animate-spin" />
-            <p className="font-serif text-lg text-slate-600">Synchronizing Tri Shuttle LAX data...</p>
+            <p className="font-serif text-lg text-slate-600">Synchronizing test LAX data...</p>
           </div>
         ) : error ? (
           <div className="bg-rose-100 border border-rose-300 text-rose-800 rounded-2xl p-6 text-center max-w-lg mx-auto space-y-4">

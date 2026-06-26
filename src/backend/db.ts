@@ -84,7 +84,7 @@ function initializeSeedData() {
   const defaultUsers: IUser[] = [
     {
       _id: adminId,
-      name: "Tri Shuttle Admin",
+      name: "test Admin",
       email: "admin@trishuttle.com",
       phone: "+1 800-555-0100",
       role: "Admin",

@@ -48,7 +48,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           <span className="text-white font-serif italic text-xl">T</span>
         </div>
         <h2 className="font-serif text-3xl font-bold tracking-tight text-[#1A1A10]">
-          Tri Shuttle Console
+          test Console
         </h2>
         <p className="text-xs uppercase tracking-widest text-[#8A8A7A] font-extrabold mt-1">
           Airport Dispatch & Operations Console

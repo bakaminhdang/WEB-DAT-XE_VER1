@@ -428,7 +428,7 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
       {/* Brand Header */}
       <div className="text-center mb-8">
         <span className="bg-amber-500/10 text-amber-500 text-xs font-bold tracking-widest uppercase px-3 py-1 rounded-full border border-amber-500/20">
-          Tri Shuttle LAX Premium
+          test LAX Premium
         </span>
         <h1 className="text-3xl font-bold text-slate-800 tracking-tight mt-3">
           Book Private LAX Airport & Luxury Shuttle
@@ -1191,7 +1191,7 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
               <div className="text-xs text-slate-400 flex items-start gap-1.5 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <span>
-                  Tri Shuttle dispatcher is currently checking your flight schedule. A driver will be assigned shortly. Please keep your communication channel active.
+                  test dispatcher is currently checking your flight schedule. A driver will be assigned shortly. Please keep your communication channel active.
                 </span>
               </div>
             )}

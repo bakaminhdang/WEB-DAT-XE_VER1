@@ -178,7 +178,7 @@ export default function AdminView({ bookings, users, onUpdateBooking, onDeleteBo
         <div>
           <h2 className="font-serif text-3xl text-[#1A1A10]">Incoming Bookings Queue</h2>
           <p className="text-xs text-[#8A8A7A] mt-1 font-mono uppercase tracking-wider">
-            Tri Shuttle LAX Dispatch & Driver Assignment
+            test LAX Dispatch & Driver Assignment
           </p>
         </div>
 
@@ -501,7 +501,7 @@ export default function AdminView({ bookings, users, onUpdateBooking, onDeleteBo
               Staff & Drivers Directory
             </h3>
             <p className="text-xs text-[#8A8A7A] mt-1">
-              Manage administrators (Admin) and drivers (Driver) registered in Tri Shuttle.
+              Manage administrators (Admin) and drivers (Driver) registered in test.
             </p>
           </div>
 

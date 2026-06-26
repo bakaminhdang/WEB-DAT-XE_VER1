@@ -296,7 +296,7 @@ The output must strictly comply with the defined JSON structure.`;
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Tri Shuttle Backend] Server running on http://0.0.0.0:${PORT}`);
+    console.log(`[test Backend] Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
