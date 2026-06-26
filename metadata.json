@@ -1,0 +1,6 @@
+{
+  "name": "Tri Shuttle LAX",
+  "description": "Hệ thống giả lập dịch vụ đưa đón sân bay cao cấp LAX - Nam California",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
