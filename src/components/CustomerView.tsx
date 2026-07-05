@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { IBooking } from "../types";
-import { createBooking } from "../utils/db";
+import { createBooking, updateBooking } from "../utils/db";
 import { 
   Plane, Phone, User, Briefcase, MapPin, CheckCircle, 
   RefreshCw, AlertCircle, Sparkles, ArrowLeft, ArrowRight, 
-  CreditCard, Wallet, Car, Mail, Check
+  CreditCard, Wallet, Car, Mail, Check, Users, Baby
 } from "lucide-react";
 
 const POPULAR_SUGGESTIONS = [
@@ -98,6 +98,148 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
   const [errorMsg, setErrorMsg] = useState("");
   const [successBooking, setSuccessBooking] = useState<IBooking | null>(null);
 
+  const [distance, setDistance] = useState<number | null>(null);
+  const [calculatingDistance, setCalculatingDistance] = useState(false);
+
+  // Helper to calculate price based on vehicle name
+  const getPriceForVehicle = (vehicleName: string, dist: number | null): number => {
+    if (dist === null) return 0;
+    if (vehicleName.includes("Sedan")) return Math.round(dist * 30);
+    if (vehicleName.includes("SUV")) return Math.round(dist * 40);
+    if (vehicleName.includes("Van")) return Math.round(dist * 50);
+    return Math.round(dist * 30); // Default
+  };
+
+  // Date validation function
+  const handleDateChange = (dateVal: string) => {
+    if (!dateVal) {
+      setPickupDate("");
+      return;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Parse year to prevent incomplete typing triggers in Chrome
+    const yearParts = dateVal.split("-");
+    if (yearParts.length > 0) {
+      const yearNum = parseInt(yearParts[0], 10);
+      // Chrome pads incomplete years (e.g. typing '2' becomes '0002') during typing.
+      // If the year is less than 1000, the user is still typing, so we temporarily skip validation.
+      if (yearNum < 1000) {
+        setPickupDate(dateVal);
+        return;
+      }
+    }
+
+    const selectedDate = new Date(dateVal + "T00:00:00");
+    if (selectedDate < today) {
+      alert("Cảnh báo: Ngày đón không thể ở trong quá khứ. Vui lòng chọn ngày hiện tại hoặc tương lai!\nWarning: Pickup date cannot be in the past. Please select today or a future date.");
+      setPickupDate("");
+    } else {
+      setPickupDate(dateVal);
+    }
+  };
+
+  // Stripe Payment Return Handler
+  useEffect(() => {
+    const handleStripeReturn = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const payment = params.get("payment");
+      const bookingId = params.get("bookingId");
+
+      if (bookingId) {
+        // Find the booking in recentBookings or fetch/load state
+        const found = recentBookings.find((b) => b._id === bookingId);
+        if (found) {
+          if (payment === "success") {
+            try {
+              // Update payment method to show it was paid via Stripe
+              const updated = await updateBooking(bookingId, {
+                payment_method: "Credit Card (Paid via Stripe)"
+              });
+              setSuccessBooking(updated);
+            } catch (err) {
+              console.error("Failed to update booking payment status:", err);
+              setSuccessBooking(found);
+            }
+          } else {
+            setSuccessBooking(found);
+            if (payment === "cancel") {
+              setErrorMsg("Thanh toán thẻ đã bị hủy hoặc gặp lỗi. Vui lòng thanh toán lại hoặc chọn phương thức khác.");
+            }
+          }
+          setCurrentStep(4);
+          onRefreshBookings();
+
+          // Clean up query parameters from the URL
+          window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+        }
+      }
+    };
+
+    handleStripeReturn();
+  }, [recentBookings, onRefreshBookings]);
+
+  // Dynamic geocoding distance estimation Effect
+  useEffect(() => {
+    const from = activeTab === "point-to-point" ? pickupAddress : hourlyStart;
+    const to = activeTab === "point-to-point" ? dropoffAddress : hourlyDest;
+
+    if (!from.trim() || !to.trim()) {
+      setDistance(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCalculatingDistance(true);
+      try {
+        // Geocode FROM
+        const resFrom = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(from)}&limit=1`);
+        const dataFrom = await resFrom.json();
+        
+        // Geocode TO
+        const resTo = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(to)}&limit=1`);
+        const dataTo = await resTo.json();
+
+        if (dataFrom.features?.[0] && dataTo.features?.[0]) {
+          const [lon1, lat1] = dataFrom.features[0].geometry.coordinates;
+          const [lon2, lat2] = dataTo.features[0].geometry.coordinates;
+
+          const R = 3958.8; // Earth's radius in miles
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLon = (lon2 - lon1) * Math.PI / 180;
+          const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const straightDistance = R * c;
+          // Driving distance factor (approx 1.3x straight line)
+          const drivingDistance = Math.round(straightDistance * 1.3 * 10) / 10;
+          setDistance(Math.max(1, drivingDistance));
+        } else {
+          throw new Error("Could not resolve coordinates");
+        }
+      } catch (e) {
+        console.warn("Using fallback distance calculation:", e);
+        const hash = (str: string) => {
+          let h = 0;
+          for (let i = 0; i < str.length; i++) {
+            h = (h << 5) - h + str.charCodeAt(i);
+            h |= 0;
+          }
+          return Math.abs(h);
+        };
+        const d = (hash(from) + hash(to)) % 40 + 5;
+        setDistance(d);
+      } finally {
+        setCalculatingDistance(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [pickupAddress, dropoffAddress, hourlyStart, hourlyDest, activeTab]);
+
   // Calculate dynamic end time for Hourly Service
   const [calculatedEndTime, setCalculatedEndTime] = useState("11:00 AM");
 
@@ -123,19 +265,6 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
     const endMinStr = endMin.toString().padStart(2, "0");
     setCalculatedEndTime(`${endHour12}:${endMinStr} ${endPeriod}`);
   }, [pickupHour, pickupMinute, pickupPeriod, hourlyHours, hourlyMinutes]);
-
-  // Automatic Airport Pickup detection based on address entered
-  useEffect(() => {
-    const addressToTest = activeTab === "point-to-point" ? pickupAddress : hourlyStart;
-    const hasAirportKeywords = 
-      addressToTest.toLowerCase().includes("lax") || 
-      addressToTest.toLowerCase().includes("airport") || 
-      addressToTest.toLowerCase().includes("terminal") || 
-      addressToTest.toLowerCase().includes("lgb") || 
-      addressToTest.toLowerCase().includes("sna");
-    
-    setIsAirportPickup(hasAirportKeywords);
-  }, [pickupAddress, hourlyStart, activeTab]);
 
   // Helper to determine the current active input value for autocomplete suggestions
   const getActiveFieldValue = () => {
@@ -294,6 +423,18 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
     e.preventDefault();
     setErrorMsg("");
 
+    if (pickupDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selectedDate = new Date(pickupDate + "T00:00:00");
+      if (selectedDate < today) {
+        alert("Cảnh báo: Ngày đón không thể ở trong quá khứ. Vui lòng chọn lại ngày hiện tại hoặc tương lai!");
+        setPickupDate("");
+        setErrorMsg("Ngày đón không thể ở trong quá khứ.");
+        return;
+      }
+    }
+
     if (activeTab === "point-to-point") {
       if (!pickupAddress.trim() || !dropoffAddress.trim() || !pickupDate) {
         setErrorMsg("Please fill in pickup, drop-off address and pickup date.");
@@ -341,6 +482,8 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
       ? `Pillar: ${pickupPillar} (Date: ${pickupDate} @ ${timeString}, Pax: ${passengers}, Child Seats: ${childSeatCount})`
       : `Date: ${pickupDate} @ ${timeString}, Pax: ${passengers}, Child Seats: ${childSeatCount}`;
 
+    const calculatedPrice = getPriceForVehicle(selectedVehicle, distance);
+
     try {
       const newBooking = await createBooking({
         customer_name: customerName,
@@ -354,12 +497,70 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
         payment_method: paymentMethod,
         selected_vehicle: selectedVehicle,
         status: "Pending",
-        driver_id: null
+        driver_id: null,
+        estimated_distance: distance !== null ? distance : undefined,
+        estimated_price: calculatedPrice || undefined
       });
 
-      setSuccessBooking(newBooking);
       onBookingCreated(newBooking);
-      setCurrentStep(4);
+
+      if (paymentMethod === "Credit Card" && calculatedPrice) {
+        try {
+          const response = await fetch("/api/create-checkout-session", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              amount: calculatedPrice,
+              bookingId: newBooking._id,
+              description: `Dịch vụ đặt xe đưa đón (${selectedVehicle})`
+            })
+          });
+
+          let errMessage = "Không thể khởi tạo phiên thanh toán Stripe.";
+          if (!response.ok) {
+            try {
+              const errData = await response.json();
+              errMessage = errData.error || errMessage;
+            } catch {
+              try {
+                const textBody = await response.text();
+                errMessage = textBody || errMessage;
+              } catch {}
+            }
+            throw new Error(errMessage);
+          }
+
+          let sessionData;
+          try {
+            sessionData = await response.json();
+          } catch (jsonErr) {
+            throw new Error("Phản hồi từ máy chủ không hợp lệ (không phải định dạng JSON).");
+          }
+
+          if (sessionData.url) {
+            // Redirect to Stripe checkout breaking out of iframes
+            if (window.top) {
+              window.top.location.href = sessionData.url;
+            } else {
+              window.location.href = sessionData.url;
+            }
+            return;
+          } else {
+            throw new Error("Không nhận được đường dẫn thanh toán hợp lệ từ hệ thống.");
+          }
+        } catch (checkoutErr: any) {
+          console.error("Stripe Checkout Error:", checkoutErr);
+          setErrorMsg(`Không thể tạo phiên thanh toán Stripe: ${checkoutErr.message}`);
+          // Fall back to showing Step 4 locally in case of failure
+          setSuccessBooking(newBooking);
+          setCurrentStep(4);
+        }
+      } else {
+        setSuccessBooking(newBooking);
+        setCurrentStep(4);
+      }
     } catch (err: any) {
       setErrorMsg(err.message || "An error occurred while creating booking.");
     } finally {
@@ -621,7 +822,7 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
                   <input
                     type="date"
                     value={pickupDate}
-                    onChange={(e) => setPickupDate(e.target.value)}
+                    onChange={(e) => handleDateChange(e.target.value)}
                     className="w-full bg-[#071324] border border-slate-700/80 rounded-xl py-3 px-4 text-slate-100 text-sm focus:outline-none focus:border-blue-500"
                     required
                   />
@@ -662,121 +863,13 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
                 </div>
               </div>
 
-              {/* Passenger & Luggage row */}
+              {/* Point-to-Point or Hourly Specific Inputs */}
               {activeTab === "point-to-point" ? (
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Passengers</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="14"
-                      value={passengers}
-                      onChange={(e) => setPassengers(Number(e.target.value))}
-                      className="w-full bg-[#071324] border border-slate-700/80 rounded-xl py-2.5 text-center text-slate-100 text-sm font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Luggage</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="12"
-                      value={luggageCount}
-                      onChange={(e) => setLuggageCount(Number(e.target.value))}
-                      className="w-full bg-[#071324] border border-slate-700/80 rounded-xl py-2.5 text-center text-slate-100 text-sm font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center">Child Seat</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="5"
-                      value={childSeatCount}
-                      onChange={(e) => setChildSeatCount(Number(e.target.value))}
-                      className="w-full bg-[#071324] border border-slate-700/80 rounded-xl py-2.5 text-center text-slate-100 text-sm font-semibold focus:outline-none"
-                    />
-                  </div>
-                </div>
+                /* Point-to-Point has no tab-specific extra inputs here since we moved sliders down */
+                null
               ) : (
-                /* Hourly Extras Row */
+                /* Hourly Duration Selector */
                 <div className="space-y-4">
-                  <div className="flex flex-wrap justify-between items-center gap-4 text-xs">
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-slate-400 uppercase tracking-wider">Passengers</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max="14"
-                        value={passengers}
-                        onChange={(e) => setPassengers(Number(e.target.value))}
-                        className="w-16 bg-[#071324] border border-slate-700/80 rounded-xl py-2 text-center text-slate-100 font-semibold focus:outline-none"
-                      />
-                    </div>
-                    
-                    <div className="flex gap-4 font-bold">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowHourlyLuggage(!showHourlyLuggage);
-                          if (showHourlyLuggage) setLuggageCount(0);
-                        }}
-                        className={`hover:text-blue-300 transition-colors flex items-center gap-1 cursor-pointer ${showHourlyLuggage ? "text-blue-400" : "text-slate-400"}`}
-                      >
-                        {showHourlyLuggage ? "✓ Luggage" : "+ Add Luggage"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowHourlyCarSeat(!showHourlyCarSeat);
-                          if (showHourlyCarSeat) setChildSeatCount(0);
-                        }}
-                        className={`hover:text-blue-300 transition-colors flex items-center gap-1 cursor-pointer ${showHourlyCarSeat ? "text-blue-400" : "text-slate-400"}`}
-                      >
-                        {showHourlyCarSeat ? "✓ Car Seat" : "+ Add Car Seat"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {(showHourlyLuggage || showHourlyCarSeat) && (
-                    <div className="p-4 bg-[#071324] rounded-2xl border border-slate-800 space-y-4">
-                      {showHourlyLuggage && (
-                        <div>
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase mb-1">
-                            <span>Luggage Count</span>
-                            <span className="text-blue-400">{luggageCount} bags</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="12"
-                            value={luggageCount}
-                            onChange={(e) => setLuggageCount(Number(e.target.value))}
-                            className="w-full accent-blue-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                          />
-                        </div>
-                      )}
-                      {showHourlyCarSeat && (
-                        <div>
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase mb-1">
-                            <span>Child / Car Seat Count</span>
-                            <span className="text-blue-400">{childSeatCount} seats</span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0"
-                            max="5"
-                            value={childSeatCount}
-                            onChange={(e) => setChildSeatCount(Number(e.target.value))}
-                            className="w-full accent-blue-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Hourly Duration Selector */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Hours</label>
@@ -811,11 +904,111 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
                 </div>
               )}
 
+              {/* UNIFIED PASSENGERS, LUGGAGE & CHILD SEATS SLIDERS */}
+              <div className="space-y-4 pt-4 border-t border-slate-800/60">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-blue-400" />
+                  Passengers & Extras Info
+                </h4>
+
+                <div className="space-y-4 bg-[#071324]/50 border border-slate-800 p-4 rounded-2xl">
+                  {/* Passengers Slider */}
+                  <div>
+                    <div className="flex justify-between items-center text-xs font-bold mb-1.5">
+                      <span className="text-slate-300 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-blue-400" />
+                        Passengers:
+                      </span>
+                      <span className="text-blue-400 text-sm font-mono">{passengers} Pax</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="14"
+                      value={passengers}
+                      onChange={(e) => setPassengers(Number(e.target.value))}
+                      className="w-full accent-blue-500 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none"
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-500 font-bold px-0.5 mt-1">
+                      <span>1</span>
+                      <span>4</span>
+                      <span>6</span>
+                      <span>10</span>
+                      <span>14</span>
+                    </div>
+                  </div>
+
+                  {/* Luggage Slider */}
+                  <div>
+                    <div className="flex justify-between items-center text-xs font-bold mb-1.5">
+                      <span className="text-slate-300 flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+                        Luggage Bags:
+                      </span>
+                      <span className="text-blue-400 text-sm font-mono">{luggageCount} Bags</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="12"
+                      value={luggageCount}
+                      onChange={(e) => setLuggageCount(Number(e.target.value))}
+                      className="w-full accent-blue-500 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none"
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-500 font-bold px-0.5 mt-1">
+                      <span>0</span>
+                      <span>2</span>
+                      <span>5</span>
+                      <span>8</span>
+                      <span>12</span>
+                    </div>
+                  </div>
+
+                  {/* Child Seats Slider */}
+                  <div>
+                    <div className="flex justify-between items-center text-xs font-bold mb-1.5">
+                      <span className="text-slate-300 flex items-center gap-1.5">
+                        <Baby className="w-3.5 h-3.5 text-blue-400" />
+                        Child / Car Seats:
+                      </span>
+                      <span className="text-blue-400 text-sm font-mono">{childSeatCount} Seats</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="5"
+                      value={childSeatCount}
+                      onChange={(e) => setChildSeatCount(Number(e.target.value))}
+                      className="w-full accent-blue-500 cursor-pointer h-2 bg-slate-800 rounded-lg appearance-none"
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-500 font-bold px-0.5 mt-1">
+                      <span>0</span>
+                      <span>1</span>
+                      <span>2</span>
+                      <span>3</span>
+                      <span>4</span>
+                      <span>5</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SUGGESTION / RECOMMENDATION NOTICE */}
+                <div className="p-3 bg-amber-950/20 border border-amber-900/30 rounded-xl flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
+                  <div>
+                    <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">Suggested Vehicle Class</p>
+                    <p className="text-xs text-slate-200 mt-0.5">
+                      Based on your selection, we recommend: <span className="font-bold text-amber-400 underline decoration-dotted">{suggestedVehicleName}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Point-to-Point Round Trip Toggle */}
               {activeTab === "point-to-point" && (
-                <div className="flex items-center justify-between pt-1 border-t border-slate-800/60 font-serif">
+                <div className="flex items-center justify-between pt-4 border-t border-slate-800/60 font-serif">
                   <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Round Trip?</span>
-                  <label className="relative inline-flex inline-flex items-center cursor-pointer">
+                  <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={isRoundTrip}
@@ -824,6 +1017,26 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
                     />
                     <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   </label>
+                </div>
+              )}
+
+              {/* Dynamic Distance Preview (Price removed from Step 1 as requested) */}
+              {(distance !== null || calculatingDistance) && (
+                <div className="p-4 bg-[#071324] border border-slate-700/60 rounded-2xl animate-fadeIn space-y-3 mt-4">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      Estimated Distance:
+                    </span>
+                    {calculatingDistance ? (
+                      <span className="text-slate-400 italic flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                        Calculating...
+                      </span>
+                    ) : (
+                      <span className="font-bold text-emerald-400 text-sm font-mono">{distance} miles</span>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -880,9 +1093,16 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
                       </div>
                     </div>
 
-                    <h4 className="text-base font-extrabold tracking-tight mt-2 flex items-center gap-1.5">
-                      <Car className="w-4 h-4 text-amber-400" /> {v.name}
-                    </h4>
+                    <div className="flex justify-between items-center mt-2">
+                      <h4 className="text-base font-extrabold tracking-tight flex items-center gap-1.5">
+                        <Car className="w-4 h-4 text-amber-400" /> {v.name}
+                      </h4>
+                      {distance !== null && (
+                        <span className="text-base font-extrabold text-slate-100 bg-white/10 px-2.5 py-1 rounded-xl font-mono">
+                          ${getPriceForVehicle(v.name, distance)}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-300 mt-1 italic">{v.models}</p>
                     
                     <div className="mt-3 pt-2 border-t border-white/5 flex items-center gap-2 text-xs text-slate-200">
@@ -1159,6 +1379,18 @@ export default function CustomerView({ onBookingCreated, recentBookings, onRefre
                   <span className="text-slate-400">Journey:</span>
                   <span className="text-slate-200 text-right truncate max-w-[250px]" title={myTrackerBooking.dropoff_address}>{myTrackerBooking.dropoff_address}</span>
                 </div>
+                {myTrackerBooking.estimated_distance && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Estimated Distance:</span>
+                    <span className="font-semibold text-emerald-400 font-mono">{myTrackerBooking.estimated_distance} miles</span>
+                  </div>
+                )}
+                {myTrackerBooking.estimated_price && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Total Price:</span>
+                    <span className="font-bold text-amber-400 text-base font-mono">${myTrackerBooking.estimated_price}</span>
+                  </div>
+                )}
               </div>
 
               {/* Driver Box */}

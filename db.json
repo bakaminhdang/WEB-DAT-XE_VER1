@@ -203,6 +203,42 @@
       "driver_id": "driver_robert_chen",
       "createdAt": "2026-06-26T05:48:31.188Z",
       "updatedAt": "2026-06-26T05:48:58.700Z"
+    },
+    {
+      "_id": "booking_exq2gfnvmmr5n8qzy",
+      "customer_name": "Test API User",
+      "customer_phone": "+1 123-456-7890",
+      "customer_email": "test_api@example.com",
+      "flight_number": "VN521",
+      "airport_terminal": "Tom Bradley International Terminal",
+      "pickup_pillar": "Pillar 4B",
+      "dropoff_address": "LAX -> Irvine, California",
+      "luggage_count": 2,
+      "payment_method": "Credit Card",
+      "selected_vehicle": "Premium Luxury SUV",
+      "status": "Pending",
+      "driver_id": null,
+      "createdAt": "2026-07-04T00:48:23.470Z",
+      "updatedAt": "2026-07-04T00:48:23.470Z"
+    },
+    {
+      "_id": "booking_0eyyol9ehmr5n9c2z",
+      "customer_name": "Test API User",
+      "customer_phone": "+1 123-456-7890",
+      "customer_email": "test_api@example.com",
+      "flight_number": "VN521",
+      "airport_terminal": "Tom Bradley International Terminal",
+      "pickup_pillar": "Pillar 4B",
+      "dropoff_address": "LAX -> Irvine, California",
+      "luggage_count": 2,
+      "payment_method": "Credit Card",
+      "selected_vehicle": "Premium Luxury SUV",
+      "status": "Pending",
+      "driver_id": null,
+      "estimated_distance": 40.5,
+      "estimated_price": 1620,
+      "createdAt": "2026-07-04T00:48:50.795Z",
+      "updatedAt": "2026-07-04T00:48:50.795Z"
     }
   ]
 }

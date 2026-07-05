@@ -148,6 +148,8 @@ async function startServer() {
         luggage_count,
         payment_method,
         selected_vehicle,
+        estimated_distance,
+        estimated_price,
       } = req.body;
 
       if (!customer_name || !customer_phone || !dropoff_address) {
@@ -167,11 +169,63 @@ async function startServer() {
         selected_vehicle: selected_vehicle || "Standard Luxury Sedan",
         status: "Pending",
         driver_id: null,
+        estimated_distance: estimated_distance ? Number(estimated_distance) : undefined,
+        estimated_price: estimated_price ? Number(estimated_price) : undefined,
       });
 
       res.status(201).json(newBooking);
     } catch (error: any) {
       res.status(500).json({ error: "Failed to create booking: " + error.message });
+    }
+  });
+
+  // Create Stripe Checkout Session endpoint
+  app.post("/api/create-checkout-session", async (req, res) => {
+    try {
+      const { amount, bookingId, description } = req.body;
+      if (!amount || !bookingId) {
+        return res.status(400).json({ error: "Missing amount or bookingId" });
+      }
+
+      const amountInCents = Math.round(Number(amount) * 100);
+      const origin = req.get("origin") || "http://localhost:3000";
+
+      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeSecretKey) {
+        return res.status(500).json({ error: "Stripe Secret Key is not configured on the server." });
+      }
+
+      const params = new URLSearchParams();
+      params.append("payment_method_types[0]", "card");
+      params.append("line_items[0][price_data][currency]", "usd");
+      params.append("line_items[0][price_data][product_data][name]", "Dịch vụ đặt xe đưa đón (TriShuttle)");
+      params.append("line_items[0][price_data][product_data][description]", description || "Tính toán dựa trên lộ trình của bạn");
+      params.append("line_items[0][price_data][unit_amount]", amountInCents.toString());
+      params.append("line_items[0][quantity]", "1");
+      params.append("mode", "payment");
+      params.append("success_url", `${origin}/?payment=success&bookingId=${bookingId}`);
+      params.append("cancel_url", `${origin}/?payment=cancel&bookingId=${bookingId}`);
+
+      const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${stripeSecretKey}`,
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: params.toString()
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Stripe API error response:", errorText);
+        return res.status(500).json({ error: `Stripe API error: ${response.statusText}` });
+      }
+
+      const session = await response.json();
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error("Create Checkout Session exception:", error);
+      res.status(500).json({ error: "Internal server error: " + error.message });
     }
   });
 

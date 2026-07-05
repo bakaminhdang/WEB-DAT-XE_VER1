@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { IBooking, IUser } from "../types";
-import { Phone, CheckCircle, Briefcase, MapPin, Plane, Shield, MessageSquare, AlertCircle } from "lucide-react";
+import { Phone, CheckCircle, Briefcase, MapPin, Plane, Shield, MessageSquare, AlertCircle, Calendar } from "lucide-react";
 
 interface DriverViewProps {
   bookings: IBooking[];
@@ -9,6 +9,76 @@ interface DriverViewProps {
   onRefresh: () => void;
   loggedInUser?: IUser;
 }
+
+const renderAddressLinks = (addressStr: string) => {
+  if (addressStr.includes(" -> ")) {
+    const parts = addressStr.split(" -> ");
+    const pickup = parts[0];
+    const dropoff = parts[1];
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1">
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(pickup)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-800 hover:underline"
+          title="Xem vị trí đón trên Google Maps"
+        >
+          {pickup}
+        </a>
+        <span className="text-slate-400 font-normal">➔</span>
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dropoff)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:text-blue-800 hover:underline"
+          title="Xem vị trí đến trên Google Maps"
+        >
+          {dropoff}
+        </a>
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressStr)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 hover:text-blue-800 hover:underline"
+      title="Xem trên Google Maps"
+    >
+      {addressStr}
+    </a>
+  );
+};
+
+const getBookingDateComponents = (booking: IBooking) => {
+  const pillarText = booking.pickup_pillar || "";
+  const match = pillarText.match(/Date:\s*([0-9]{4})-([0-9]{2})-([0-9]{2})/i);
+  if (match) {
+    return {
+      year: parseInt(match[1], 10),
+      month: `${match[1]}-${match[2]}`, // "YYYY-MM"
+      day: `${match[1]}-${match[2]}-${match[3]}`, // "YYYY-MM-DD"
+    };
+  }
+  // Fallback to createdAt if no date in pickup_pillar
+  if (booking.createdAt) {
+    const d = new Date(booking.createdAt);
+    if (!isNaN(d.getTime())) {
+      const yStr = d.getFullYear().toString();
+      const mStr = (d.getMonth() + 1).toString().padStart(2, '0');
+      const dStr = d.getDate().toString().padStart(2, '0');
+      return {
+        year: d.getFullYear(),
+        month: `${yStr}-${mStr}`,
+        day: `${yStr}-${mStr}-${dStr}`,
+      };
+    }
+  }
+  return null;
+};
 
 export default function DriverView({ bookings, users, onUpdateBooking, onRefresh, loggedInUser }: DriverViewProps) {
   const drivers = users.filter((u) => u.role === "Driver");
@@ -19,6 +89,12 @@ export default function DriverView({ bookings, users, onUpdateBooking, onRefresh
   );
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  // Schedule filtering states
+  const [scheduleFilterMode, setScheduleFilterMode] = useState<"All" | "Day" | "Month" | "Year">("All");
+  const [schedDay, setSchedDay] = useState<string>(new Date().toLocaleDateString("en-CA")); // "YYYY-MM-DD"
+  const [schedMonth, setSchedMonth] = useState<string>(new Date().toLocaleDateString("en-CA").substring(0, 7)); // "YYYY-MM"
+  const [schedYear, setSchedYear] = useState<number>(new Date().getFullYear());
+
   useEffect(() => {
     if (loggedInUser) {
       setSelectedDriverId(loggedInUser._id);
@@ -27,14 +103,24 @@ export default function DriverView({ bookings, users, onUpdateBooking, onRefresh
 
   const activeDriver = drivers.find((d) => d._id === selectedDriverId) || loggedInUser || drivers[0];
 
+  const matchesScheduleFilter = (booking: IBooking) => {
+    if (scheduleFilterMode === "All") return true;
+    const comps = getBookingDateComponents(booking);
+    if (!comps) return false;
+    if (scheduleFilterMode === "Day") return comps.day === schedDay;
+    if (scheduleFilterMode === "Month") return comps.month === schedMonth;
+    if (scheduleFilterMode === "Year") return comps.year === schedYear;
+    return true;
+  };
+
   // Filter bookings for this driver that are "Active"
   const assignedActiveBookings = bookings.filter(
-    (b) => b.driver_id === selectedDriverId && b.status === "Active"
+    (b) => b.driver_id === selectedDriverId && b.status === "Active" && matchesScheduleFilter(b)
   );
 
   // Filter historical bookings for this driver (Completed/Cancelled)
   const assignedHistoryBookings = bookings.filter(
-    (b) => b.driver_id === selectedDriverId && (b.status === "Completed" || b.status === "Cancelled")
+    (b) => b.driver_id === selectedDriverId && (b.status === "Completed" || b.status === "Cancelled") && matchesScheduleFilter(b)
   );
 
   const handleMarkCompleted = async (id: string) => {
@@ -106,6 +192,98 @@ export default function DriverView({ bookings, users, onUpdateBooking, onRefresh
               <span className="font-bold text-slate-400 mr-1">Operating Zone:</span>
               <span className="text-[#5A5A40] font-semibold">LAX ⇆ Orange County, Little Saigon, Irvine</span>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Schedule filter panel */}
+      <div className="bg-[#E6E6DF]/30 border border-[#E6E6DF] p-4 rounded-2xl flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold text-[#5A5A40] flex items-center gap-1.5 font-mono uppercase tracking-wider">
+            <Calendar className="w-4 h-4 text-[#8A8A7A]" />
+            Schedule View:
+          </span>
+          <div className="bg-[#E6E6DF]/60 p-0.5 rounded-lg inline-flex">
+            {[
+              { id: "All", label: "Show All" },
+              { id: "Day", label: "By Day" },
+              { id: "Month", label: "By Month" },
+              { id: "Year", label: "By Year" }
+            ].map((mode) => (
+              <button
+                key={mode.id}
+                onClick={() => setScheduleFilterMode(mode.id as any)}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                  scheduleFilterMode === mode.id
+                    ? "bg-[#5A5A40] text-white shadow-sm"
+                    : "text-[#5A5A40] hover:text-[#1A1A10]"
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Dynamic Controls based on selected mode */}
+        {scheduleFilterMode !== "All" && (
+          <div className="flex flex-wrap items-center gap-2 animate-fadeIn w-full md:w-auto">
+            {scheduleFilterMode === "Day" && (
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <input
+                  type="date"
+                  value={schedDay}
+                  onChange={(e) => setSchedDay(e.target.value)}
+                  className="bg-white border border-[#C8C8BA] rounded-xl px-3 py-1.5 text-xs text-[#1A1A10] focus:outline-none focus:border-[#5A5A40] font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSchedDay(new Date().toLocaleDateString("en-CA"))}
+                  className="px-2.5 py-1.5 bg-[#E6E6DF] hover:bg-[#D4D4C8] text-[#5A5A40] text-[10px] font-bold uppercase rounded-lg transition-colors"
+                >
+                  Today
+                </button>
+              </div>
+            )}
+
+            {scheduleFilterMode === "Month" && (
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <input
+                  type="month"
+                  value={schedMonth}
+                  onChange={(e) => setSchedMonth(e.target.value)}
+                  className="bg-white border border-[#C8C8BA] rounded-xl px-3 py-1.5 text-xs text-[#1A1A10] focus:outline-none focus:border-[#5A5A40] font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSchedMonth(new Date().toLocaleDateString("en-CA").substring(0, 7))}
+                  className="px-2.5 py-1.5 bg-[#E6E6DF] hover:bg-[#D4D4C8] text-[#5A5A40] text-[10px] font-bold uppercase rounded-lg transition-colors"
+                >
+                  This Month
+                </button>
+              </div>
+            )}
+
+            {scheduleFilterMode === "Year" && (
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <select
+                  value={schedYear}
+                  onChange={(e) => setSchedYear(Number(e.target.value))}
+                  className="bg-white border border-[#C8C8BA] rounded-xl px-3 py-1.5 text-xs text-[#1A1A10] focus:outline-none focus:border-[#5A5A40] font-mono"
+                >
+                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 1 + i).map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSchedYear(new Date().getFullYear())}
+                  className="px-2.5 py-1.5 bg-[#E6E6DF] hover:bg-[#D4D4C8] text-[#5A5A40] text-[10px] font-bold uppercase rounded-lg transition-colors"
+                >
+                  This Year
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -196,7 +374,7 @@ export default function DriverView({ bookings, users, onUpdateBooking, onRefresh
                         <span>DROP-OFF ADDRESS (DESTINATION)</span>
                       </div>
                       <p className="text-sm font-bold text-[#1A1A10]">
-                        {booking.dropoff_address}
+                        {renderAddressLinks(booking.dropoff_address)}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
                         <span className="flex items-center gap-1">
@@ -211,6 +389,16 @@ export default function DriverView({ bookings, users, onUpdateBooking, onRefresh
                         {booking.payment_method && (
                           <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">
                             💳 {booking.payment_method}
+                          </span>
+                        )}
+                        {booking.estimated_distance && (
+                          <span className="font-bold text-[#4A6741] bg-[#EEF2E6] border border-[#D4D4C8] px-2 py-0.5 rounded font-mono">
+                            📏 {booking.estimated_distance} mi
+                          </span>
+                        )}
+                        {booking.estimated_price && (
+                          <span className="font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-mono">
+                            💵 ${booking.estimated_price}
                           </span>
                         )}
                       </div>
@@ -282,7 +470,14 @@ export default function DriverView({ bookings, users, onUpdateBooking, onRefresh
                       </span>
                     </div>
                     <p className="text-slate-500 font-mono text-[10px] mt-0.5">{b.flight_number} • {b.airport_terminal}</p>
-                    <p className="text-slate-600 mt-1 truncate">{b.dropoff_address}</p>
+                    <p className="text-slate-600 mt-1">{renderAddressLinks(b.dropoff_address)}</p>
+                    {(b.estimated_distance || b.estimated_price) && (
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                        {b.estimated_distance && `📏 ${b.estimated_distance} mi`}
+                        {b.estimated_distance && b.estimated_price && " • "}
+                        {b.estimated_price && `💵 $${b.estimated_price}`}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>

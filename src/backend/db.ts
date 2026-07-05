@@ -27,6 +27,8 @@ export interface IBooking {
   selected_vehicle?: string;
   status: "Pending" | "Active" | "Completed" | "Cancelled";
   driver_id: string | null;
+  estimated_distance?: number;
+  estimated_price?: number;
   createdAt: string;
   updatedAt: string;
 }

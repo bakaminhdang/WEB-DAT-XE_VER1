@@ -167,8 +167,8 @@ export default function App() {
               <h1 className="font-serif text-xl sm:text-2xl tracking-tight text-[#1A1A10] font-bold">
                 test LAX
               </h1>
-              <p className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#8A8A7A] font-extrabold">
-                {isAdminRoute ? "Operation Management Console" : "LAX Private Luxury Transport"}
+              <p className="text-[8px] sm:text-[10px] uppercase tracking-widest text-[#8A8A7A] font-extrabold max-w-[130px] sm:max-w-none truncate">
+                {isAdminRoute ? "Operation Console" : "LAX Luxury Transport"}
               </p>
             </div>
           </div>
@@ -220,7 +220,8 @@ export default function App() {
               ) : (
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[#5A5A40]">
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Secure Operations Portal</span>
+                  <span className="hidden sm:inline">Secure Operations Portal</span>
+                  <span className="sm:hidden">Ops Portal</span>
                 </div>
               )
             ) : (
