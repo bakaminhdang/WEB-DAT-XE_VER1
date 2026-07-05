@@ -5,7 +5,7 @@ import { User, Booking } from "./src/backend/db.js";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 
-// Load environment variables
+// Load environment variables (reloaded)
 dotenv.config();
 
 async function startServer() {
