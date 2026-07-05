@@ -1,4 +1,4 @@
-# Trigger new deployment after settings change
+# Force a clean fresh run of the deployment pipeline
 name: Deploy to GitHub Pages
 
 on:
